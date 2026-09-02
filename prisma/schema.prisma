@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Priority {
+  high
+  medium
+  normal
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+}
+
+model Gap {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  category    String
+  priority    Priority
+  skills      String[]
+  projects    Project[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  gapId           String
+  gap             Gap           @relation(fields: [gapId], references: [id])
+  title           String
+  owner           String
+  country         String
+  contact         String?
+  summary         String
+  status          ProjectStatus @default(ACTIVE)
+  achievements    String?
+  results         String?
+  lessonsLearned  String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([gapId])
+}

@@ -1,6 +1,11 @@
-import { Gap, Project } from "./types";
+import "dotenv/config";
+import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-export const INITIAL_GAPS: Gap[] = [
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter });
+
+const INITIAL_GAPS = [
   {
     id: "g1",
     title: "دعم وتفريغ نخبة من المصلحين ماديًا",
@@ -84,7 +89,7 @@ export const INITIAL_GAPS: Gap[] = [
   },
 ];
 
-export const INITIAL_PROJECTS: Project[] = [
+const INITIAL_PROJECTS = [
   {
     id: "p1",
     gapId: "g2",
@@ -135,3 +140,32 @@ export const INITIAL_PROJECTS: Project[] = [
       "كثير من الشخصيات ترددت في التوثيق العلني؛ إتاحة خيار النشر المؤجل أو المجهول رفع نسبة الموافقة بشكل ملحوظ.",
   },
 ];
+
+async function main() {
+  for (const gap of INITIAL_GAPS) {
+    await prisma.gap.upsert({
+      where: { id: gap.id },
+      update: {},
+      create: gap,
+    });
+  }
+  for (const project of INITIAL_PROJECTS) {
+    await prisma.project.upsert({
+      where: { id: project.id },
+      update: {},
+      create: project,
+    });
+  }
+  console.log(
+    `Seed complete: ${INITIAL_GAPS.length} gaps, ${INITIAL_PROJECTS.length} projects (upserted, safe to re-run).`
+  );
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

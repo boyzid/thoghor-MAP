@@ -8,7 +8,7 @@ import { PRIORITY_LABEL } from "@/lib/types";
 import AddProjectModal from "@/app/components/modals/AddProjectModal";
 
 export default function GapDetailClient({ gapId }: { gapId: string }) {
-  const { getGap, getProjectsForGap } = useStore();
+  const { getGap, getProjectsForGap, loading } = useStore();
   const gap = getGap(gapId);
   const [tab, setTab] = useState<"ACTIVE" | "COMPLETED">("ACTIVE");
   const [country, setCountry] = useState("all");
@@ -26,6 +26,10 @@ export default function GapDetailClient({ gapId }: { gapId: string }) {
       (p) => p.status === tab && (country === "all" || p.country === country)
     );
   }, [allProjects, tab, country]);
+
+  if (loading) {
+    return <div className="max-w-3xl mx-auto px-5 py-16 text-center text-textDim">جارٍ التحميل...</div>;
+  }
 
   if (!gap) {
     return (

@@ -8,9 +8,13 @@ import { STATUS_LABEL } from "@/lib/types";
 import CompleteProjectModal from "@/app/components/modals/CompleteProjectModal";
 
 export default function ProjectDetailClient({ projectId }: { projectId: string }) {
-  const { getProject, getGap } = useStore();
+  const { getProject, getGap, loading } = useStore();
   const project = getProject(projectId);
   const [showComplete, setShowComplete] = useState(false);
+
+  if (loading) {
+    return <div className="max-w-3xl mx-auto px-5 py-16 text-center text-textDim">جارٍ التحميل...</div>;
+  }
 
   if (!project) {
     return (

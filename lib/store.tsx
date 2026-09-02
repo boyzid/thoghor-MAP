@@ -1,18 +1,18 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { Gap, Project } from "./types";
-import { INITIAL_GAPS, INITIAL_PROJECTS } from "./data";
 
 interface StoreShape {
   gaps: Gap[];
   projects: Project[];
-  addGap: (gap: Omit<Gap, "id">) => Gap;
-  addProject: (project: Omit<Project, "id" | "status">) => Project;
+  loading: boolean;
+  addGap: (gap: Omit<Gap, "id">) => Promise<Gap>;
+  addProject: (project: Omit<Project, "id" | "status">) => Promise<Project>;
   completeProject: (
     projectId: string,
     payload: { achievements: string; results: string; lessonsLearned: string }
-  ) => void;
+  ) => Promise<void>;
   getGap: (id: string) => Gap | undefined;
   getProject: (id: string) => Project | undefined;
   getProjectsForGap: (gapId: string) => Project[];
@@ -22,39 +22,70 @@ interface StoreShape {
 const StoreContext = createContext<StoreShape | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [gaps, setGaps] = useState<Gap[]>(INITIAL_GAPS);
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
+  const [gaps, setGaps] = useState<Gap[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const addGap = useCallback((gap: Omit<Gap, "id">) => {
-    const newGap: Gap = { ...gap, id: "g" + Date.now() };
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [gapsRes, projectsRes] = await Promise.all([
+          fetch("/api/gaps"),
+          fetch("/api/projects"),
+        ]);
+        const [gapsData, projectsData] = await Promise.all([
+          gapsRes.json(),
+          projectsRes.json(),
+        ]);
+        if (!cancelled) {
+          setGaps(gapsData);
+          setProjects(projectsData);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const addGap = useCallback(async (gap: Omit<Gap, "id">) => {
+    const res = await fetch("/api/gaps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(gap),
+    });
+    const newGap: Gap = await res.json();
     setGaps((prev) => [newGap, ...prev]);
     return newGap;
   }, []);
 
-  const addProject = useCallback((project: Omit<Project, "id" | "status">) => {
-    const newProject: Project = { ...project, id: "p" + Date.now(), status: "ACTIVE" };
+  const addProject = useCallback(async (project: Omit<Project, "id" | "status">) => {
+    const res = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(project),
+    });
+    const newProject: Project = await res.json();
     setProjects((prev) => [newProject, ...prev]);
     return newProject;
   }, []);
 
   const completeProject = useCallback(
-    (
+    async (
       projectId: string,
       payload: { achievements: string; results: string; lessonsLearned: string }
     ) => {
-      setProjects((prev) =>
-        prev.map((p) =>
-          p.id === projectId
-            ? {
-                ...p,
-                status: "COMPLETED",
-                achievements: payload.achievements,
-                results: payload.results,
-                lessonsLearned: payload.lessonsLearned,
-              }
-            : p
-        )
-      );
+      const res = await fetch(`/api/projects/${projectId}/complete`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const updated: Project = await res.json();
+      setProjects((prev) => prev.map((p) => (p.id === projectId ? updated : p)));
     },
     []
   );
@@ -78,6 +109,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       value={{
         gaps,
         projects,
+        loading,
         addGap,
         addProject,
         completeProject,

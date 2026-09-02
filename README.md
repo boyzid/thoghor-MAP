@@ -1,23 +1,43 @@
-# منصة خارطة الثغور — نسخة أولية (UI/UX Routing)
+# منصة خارطة الثغور
 
-## التشغيل
+## التشغيل محليًا (بدون Docker)
+يتطلب هذا وجود PostgreSQL على جهازك (أو أي Postgres متاح عبر الشبكة).
+
 ```bash
 npm install
-cp .env.local.example .env.local   # ثم عبّئ متغيرات Google OAuth
+cp .env.local.example .env.local   # واملأ DATABASE_URL ومتغيرات Google OAuth
+npm run db:generate                # توليد Prisma Client
+npm run db:migrate:deploy          # تطبيق migrations على القاعدة
 npm run dev
 ```
 
-## ملاحظات مهمة قبل الاستخدام الفعلي
+لإضافة بيانات تجريبية (اختياري، يعمل يدويًا فقط ولا يُنفَّذ تلقائيًا):
+```bash
+npm run db:seed
+```
 
-1. **لا يوجد قاعدة بيانات حقيقية بعد.** كل البيانات (الثغور والمشاريع) محفوظة في
-   الذاكرة عبر `lib/store.tsx` باستخدام React Context، وتُفقد عند إعادة تحميل
-   الصفحة. الهدف من هذا التسليم هو الواجهات والمسارات فقط، كما طُلب.
-2. **تسجيل الدخول عبر Gmail (NextAuth + Google Provider)** لن يعمل فعليًا حتى
-   تُنشئ بيانات اعتماد Google OAuth حقيقية وتضعها في `.env.local`
-   (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`).
-3. حقل **"الدولة" ورابط التواصل** في المشاريع لم يكونا جزءًا من هيكل البيانات
-   المتفق عليه سابقًا (ثغر ← مشروع ← نتائج/دروس)، لكن أُضيفا هنا تنفيذًا لطلبك
-   الأخير. إن أردت إزالتهما لاحقًا للحفاظ على أبسط نسخة MVP، فالأمر سهل.
+## التشغيل عبر Docker Compose (يشمل PostgreSQL)
+```bash
+cp .env.local.example .env         # docker-compose يقرأ .env تلقائيًا
+docker compose up --build
+```
+- يبدأ التطبيق تلقائيًا بتطبيق `prisma migrate deploy` عند كل إقلاع (آمن عند
+  إعادة التشغيل — لا يُعيد تنفيذ migrations مطبَّقة مسبقًا).
+- الـ seed **لا** يعمل تلقائيًا. لتشغيله يدويًا داخل الحاوية:
+  ```bash
+  docker compose exec app node prisma/seed.mjs
+  ```
+- فحص الجاهزية: `GET /api/health` (يتحقق من الاتصال الفعلي بقاعدة البيانات).
+
+## ملاحظات مهمة
+
+1. **قاعدة البيانات حقيقية الآن (PostgreSQL عبر Prisma).** جدول `Gap` و
+   `Project` في `prisma/schema.prisma`، والبيانات تُقرأ وتُكتب عبر
+   `app/api/gaps` و `app/api/projects` بدلاً من الذاكرة المؤقتة.
+2. **تسجيل الدخول عبر Gmail (NextAuth v4 + Google Provider)** يتطلب بيانات
+   اعتماد Google OAuth حقيقية في `.env.local` / `.env`
+   (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`,
+   `NEXTAUTH_URL`).
 
 ## البنية
 ```
@@ -28,8 +48,19 @@ app/
   components/                     → Navbar, FilterBar, GapCard
   components/modals/              → AddGapModal, AddProjectModal, CompleteProjectModal
   api/auth/[...nextauth]/route.ts → إعداد NextAuth (Google)
+  api/gaps/route.ts               → GET/POST الثغور (Prisma)
+  api/projects/route.ts           → GET/POST المشاريع (Prisma)
+  api/projects/[id]/complete/     → PATCH إنهاء مشروع وتوثيقه (Prisma)
+  api/health/route.ts             → فحص اتصال قاعدة البيانات
 lib/
   types.ts                        → الأنواع (Gap, Project)
-  data.ts                         → البيانات الأولية (9 ثغور + نماذج مشاريع)
-  store.tsx                       → إدارة الحالة على مستوى العميل
+  prisma.ts                       → عميل Prisma (singleton)
+  store.tsx                       → إدارة الحالة على مستوى العميل (تجلب من API)
+prisma/
+  schema.prisma                   → مخطط قاعدة البيانات
+  migrations/                     → migrations إنتاجية (prisma migrate deploy)
+  seed.mjs                        → بيانات تجريبية أولية (تشغيل يدوي فقط)
+Dockerfile                        → بناء إنتاجي متعدد المراحل (Next.js standalone)
+docker-compose.yml                → app + PostgreSQL مع healthcheck
+docker-entrypoint.sh              → يطبّق migrate deploy قبل بدء التطبيق
 ```
