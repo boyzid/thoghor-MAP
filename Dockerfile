@@ -28,11 +28,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/postgres-array ./node_modules/postgres-array
-COPY --from=builder /app/node_modules/dotenv ./node_modules/dotenv
+# Full node_modules (not just Next's traced standalone subset): the Prisma
+# CLI invoked by docker-entrypoint.sh for `migrate deploy` pulls in its own
+# deep, frequently-changing dependency tree (@prisma/config -> effect, c12,
+# empathic, deepmerge-ts -> ...) that Next's standalone tracing does not (and
+# should not have to) know about. Copying the full tree here is more image
+# weight but far more reliable than hand-listing every transitive package.
+COPY --from=builder /app/node_modules ./node_modules
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh && chown nextjs:nodejs ./docker-entrypoint.sh
