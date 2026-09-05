@@ -14,8 +14,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
-    ports:
-      - "5432:5432"
 
   app:
     build:
