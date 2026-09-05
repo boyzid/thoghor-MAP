@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSession, signIn } from "next-auth/react";
 import { Plus } from "lucide-react";
 import Navbar from "./components/Navbar";
 import FilterBar from "./components/FilterBar";
@@ -11,6 +12,7 @@ import { Priority } from "@/lib/types";
 
 export default function HomeClient() {
   const { gaps, countProjectsForGap } = useStore();
+  const { data: session } = useSession();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [priority, setPriority] = useState<Priority | "all">("all");
@@ -72,9 +74,10 @@ export default function HomeClient() {
       </main>
 
       <button
-        onClick={() => setShowAddGap(true)}
+        onClick={() => (session ? setShowAddGap(true) : signIn("google"))}
         className="fixed bottom-6 right-6 bg-gold text-bgDeep rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-goldBright transition-colors z-40"
         aria-label="إضافة ثغر جديد"
+        title={session ? "إضافة ثغر جديد" : "سجّل الدخول لإضافة ثغر"}
       >
         <Plus size={26} />
       </button>

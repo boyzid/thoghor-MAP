@@ -17,18 +17,22 @@ export default function AddProjectModal({ gapId, onClose }: AddProjectModalProps
   const [contact, setContact] = useState("");
   const [summary, setSummary] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !owner.trim()) return;
-    addProject({
-      gapId,
-      title: title.trim(),
-      owner: owner.trim(),
-      country: country.trim() || "غير محدد",
-      contact: contact.trim() || undefined,
-      summary: summary.trim(),
-    });
-    onClose();
+    try {
+      await addProject({
+        gapId,
+        title: title.trim(),
+        owner: owner.trim(),
+        country: country.trim() || "غير محدد",
+        contact: contact.trim() || undefined,
+        summary: summary.trim(),
+      });
+      onClose();
+    } catch (err) {
+      alert((err as Error).message);
+    }
   }
 
   return (

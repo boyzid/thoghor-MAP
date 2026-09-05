@@ -17,22 +17,26 @@ export default function AddGapModal({ onClose }: AddGapModalProps) {
   const [priority, setPriority] = useState<Priority>("medium");
   const [skills, setSkills] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !description.trim()) return;
-    addGap({
-      title: title.trim(),
-      description: description.trim(),
-      category: category.trim() || "عام",
-      priority,
-      skills: skills
-        .split("،")
-        .join(",")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    });
-    onClose();
+    try {
+      await addGap({
+        title: title.trim(),
+        description: description.trim(),
+        category: category.trim() || "عام",
+        priority,
+        skills: skills
+          .split("،")
+          .join(",")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      });
+      onClose();
+    } catch (err) {
+      alert((err as Error).message);
+    }
   }
 
   return (

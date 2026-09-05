@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser, AuthError } from "@/lib/serverAuth";
 
 export async function GET() {
   try {
-    const projects = await prisma.project.findMany({ orderBy: { createdAt: "asc" } });
+    const projects = await prisma.project.findMany({
+      orderBy: { createdAt: "asc" },
+      include: { results: true, lessons: true },
+    });
     return NextResponse.json(projects);
   } catch (err) {
     return NextResponse.json(
@@ -14,6 +18,16 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  let user;
+  try {
+    user = await requireUser();
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    throw err;
+  }
+
   const body = await req.json();
 
   if (!body?.gapId || !body?.title || !body?.owner || !body?.country || !body?.summary) {
@@ -30,6 +44,7 @@ export async function POST(req: Request) {
         contact: body.contact || null,
         summary: body.summary,
         status: "ACTIVE",
+        creatorId: user.id,
       },
     });
     return NextResponse.json(project, { status: 201 });

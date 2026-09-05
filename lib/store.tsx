@@ -7,8 +7,10 @@ interface StoreShape {
   gaps: Gap[];
   projects: Project[];
   loading: boolean;
-  addGap: (gap: Omit<Gap, "id">) => Promise<Gap>;
-  addProject: (project: Omit<Project, "id" | "status">) => Promise<Project>;
+  addGap: (gap: Omit<Gap, "id" | "creatorId">) => Promise<Gap>;
+  addProject: (
+    project: Omit<Project, "id" | "status" | "creatorId" | "results" | "lessons">
+  ) => Promise<Project>;
   completeProject: (
     projectId: string,
     payload: { achievements: string; results: string; lessonsLearned: string }
@@ -52,27 +54,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const addGap = useCallback(async (gap: Omit<Gap, "id">) => {
+  const addGap = useCallback(async (gap: Omit<Gap, "id" | "creatorId">) => {
     const res = await fetch("/api/gaps", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(gap),
     });
-    const newGap: Gap = await res.json();
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || "تعذّر إنشاء الثغر");
+    const newGap: Gap = data;
     setGaps((prev) => [newGap, ...prev]);
     return newGap;
   }, []);
 
-  const addProject = useCallback(async (project: Omit<Project, "id" | "status">) => {
-    const res = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(project),
-    });
-    const newProject: Project = await res.json();
-    setProjects((prev) => [newProject, ...prev]);
-    return newProject;
-  }, []);
+  const addProject = useCallback(
+    async (project: Omit<Project, "id" | "status" | "creatorId" | "results" | "lessons">) => {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(project),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "تعذّر إنشاء المشروع");
+      const newProject: Project = { ...data, results: data.results ?? [], lessons: data.lessons ?? [] };
+      setProjects((prev) => [newProject, ...prev]);
+      return newProject;
+    },
+    []
+  );
 
   const completeProject = useCallback(
     async (
@@ -84,7 +93,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const updated: Project = await res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "تعذّر إنهاء المشروع");
+      const updated: Project = data;
       setProjects((prev) => prev.map((p) => (p.id === projectId ? updated : p)));
     },
     []

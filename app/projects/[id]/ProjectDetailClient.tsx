@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { ArrowRight, Mail } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { STATUS_LABEL } from "@/lib/types";
@@ -9,8 +10,14 @@ import CompleteProjectModal from "@/app/components/modals/CompleteProjectModal";
 
 export default function ProjectDetailClient({ projectId }: { projectId: string }) {
   const { getProject, getGap, loading } = useStore();
+  const { data: session } = useSession();
   const project = getProject(projectId);
   const [showComplete, setShowComplete] = useState(false);
+
+  const canComplete =
+    !!session?.user &&
+    (session.user.role === "ADMIN" ||
+      (project?.creatorId !== null && project?.creatorId === session.user.id));
 
   if (loading) {
     return <div className="max-w-3xl mx-auto px-5 py-16 text-center text-textDim">جارٍ التحميل...</div>;
@@ -69,38 +76,37 @@ export default function ProjectDetailClient({ projectId }: { projectId: string }
                 تواصل للانضمام
               </a>
             )}
-            <button
-              onClick={() => setShowComplete(true)}
-              className="text-sm bg-panel2 border border-line rounded-lg px-4 py-2 hover:border-gold transition-colors"
-            >
-              إنهاء المشروع وتوثيقه
-            </button>
+            {canComplete && (
+              <button
+                onClick={() => setShowComplete(true)}
+                className="text-sm bg-panel2 border border-line rounded-lg px-4 py-2 hover:border-gold transition-colors"
+              >
+                إنهاء المشروع وتوثيقه
+              </button>
+            )}
           </div>
         )}
       </div>
 
       {project.status === "COMPLETED" && (
         <div className="space-y-5">
-          <div className="bg-panel border border-line rounded-xl p-5">
-            <h2 className="flex items-center gap-2 font-display text-lg mb-2 text-gold">
-              <span>📝</span> ماذا فعلنا
-            </h2>
-            <p className="text-sm text-textDim leading-relaxed">{project.achievements}</p>
-          </div>
+          {project.results.map((r) => (
+            <div key={r.id} className="bg-panel border border-line rounded-xl p-5">
+              <h2 className="flex items-center gap-2 font-display text-lg mb-2 text-gold">
+                <span>{r.title === "الإنجازات" ? "📝" : "📊"}</span> {r.title}
+              </h2>
+              <p className="text-sm text-textDim leading-relaxed">{r.description}</p>
+            </div>
+          ))}
 
-          <div className="bg-panel border border-line rounded-xl p-5">
-            <h2 className="flex items-center gap-2 font-display text-lg mb-2 text-sage">
-              <span>📊</span> ماذا تحقق
-            </h2>
-            <p className="text-sm text-textDim leading-relaxed">{project.results}</p>
-          </div>
-
-          <div className="bg-panel border border-line rounded-xl p-5">
-            <h2 className="flex items-center gap-2 font-display text-lg mb-2 text-goldBright">
-              <span>💡</span> ماذا تعلمنا
-            </h2>
-            <p className="text-sm text-textDim leading-relaxed">{project.lessonsLearned}</p>
-          </div>
+          {project.lessons.map((l) => (
+            <div key={l.id} className="bg-panel border border-line rounded-xl p-5">
+              <h2 className="flex items-center gap-2 font-display text-lg mb-2 text-goldBright">
+                <span>💡</span> {l.title}
+              </h2>
+              <p className="text-sm text-textDim leading-relaxed">{l.description}</p>
+            </div>
+          ))}
         </div>
       )}
 

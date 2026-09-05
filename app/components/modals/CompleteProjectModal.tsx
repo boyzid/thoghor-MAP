@@ -18,15 +18,19 @@ export default function CompleteProjectModal({
   const [results, setResults] = useState("");
   const [lessonsLearned, setLessonsLearned] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!achievements.trim() || !results.trim() || !lessonsLearned.trim()) return;
-    completeProject(projectId, {
-      achievements: achievements.trim(),
-      results: results.trim(),
-      lessonsLearned: lessonsLearned.trim(),
-    });
-    onClose();
+    try {
+      await completeProject(projectId, {
+        achievements: achievements.trim(),
+        results: results.trim(),
+        lessonsLearned: lessonsLearned.trim(),
+      });
+      onClose();
+    } catch (err) {
+      alert((err as Error).message);
+    }
   }
 
   return (

@@ -2,6 +2,8 @@ export type Priority = "high" | "medium" | "normal";
 
 export type ProjectStatus = "ACTIVE" | "COMPLETED";
 
+export type Role = "USER" | "ADMIN";
+
 export interface Gap {
   id: string;
   title: string;
@@ -9,11 +11,27 @@ export interface Gap {
   category: string;
   priority: Priority;
   skills: string[];
+  creatorId: string | null;
+}
+
+export interface Result {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+}
+
+export interface Lesson {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
 }
 
 export interface Project {
   id: string;
   gapId: string;
+  creatorId: string | null;
   title: string;
   owner: string;
   country: string;
@@ -21,9 +39,8 @@ export interface Project {
   summary: string;
   status: ProjectStatus;
   // populated only when status === "COMPLETED"
-  achievements?: string;
-  results?: string;
-  lessonsLearned?: string;
+  results: Result[];
+  lessons: Lesson[];
 }
 
 export const PRIORITY_LABEL: Record<Priority, string> = {

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSession, signIn } from "next-auth/react";
 import { ArrowRight, Mail } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { PRIORITY_LABEL } from "@/lib/types";
@@ -9,6 +10,7 @@ import AddProjectModal from "@/app/components/modals/AddProjectModal";
 
 export default function GapDetailClient({ gapId }: { gapId: string }) {
   const { getGap, getProjectsForGap, loading } = useStore();
+  const { data: session } = useSession();
   const gap = getGap(gapId);
   const [tab, setTab] = useState<"ACTIVE" | "COMPLETED">("ACTIVE");
   const [country, setCountry] = useState("all");
@@ -152,7 +154,7 @@ export default function GapDetailClient({ gapId }: { gapId: string }) {
       )}
 
       <button
-        onClick={() => setShowAddProject(true)}
+        onClick={() => (session ? setShowAddProject(true) : signIn("google"))}
         className="bg-gold text-bgDeep font-bold rounded-lg px-5 py-2.5 hover:bg-goldBright transition-colors"
       >
         + إضافة مشروع جديد تحت هذا الثغر

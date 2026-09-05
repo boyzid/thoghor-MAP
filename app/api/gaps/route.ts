@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser, AuthError } from "@/lib/serverAuth";
 
 export async function GET() {
   try {
@@ -14,6 +15,16 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  let user;
+  try {
+    user = await requireUser();
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    throw err;
+  }
+
   const body = await req.json();
 
   if (!body?.title || !body?.description || !body?.priority) {
@@ -28,6 +39,7 @@ export async function POST(req: Request) {
         category: body.category || "عام",
         priority: body.priority,
         skills: Array.isArray(body.skills) ? body.skills : [],
+        creatorId: user.id,
       },
     });
     return NextResponse.json(gap, { status: 201 });
