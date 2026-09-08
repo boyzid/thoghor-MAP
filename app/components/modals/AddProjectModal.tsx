@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useStore } from "@/lib/store";
 
@@ -16,10 +16,20 @@ export default function AddProjectModal({ gapId, onClose }: AddProjectModalProps
   const [country, setCountry] = useState("");
   const [contact, setContact] = useState("");
   const [summary, setSummary] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Authoritative re-entrancy guard: a ref mutates synchronously, so a second
+  // invocation of handleSubmit (fast double-click, repeated Enter, etc.) sees
+  // the updated value immediately — unlike isSubmitting state, whose update
+  // is not visible until the next render.
+  const isSubmittingRef = useRef(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !owner.trim()) return;
+    if (isSubmittingRef.current) return;
+
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
     try {
       await addProject({
         gapId,
@@ -32,6 +42,9 @@ export default function AddProjectModal({ gapId, onClose }: AddProjectModalProps
       onClose();
     } catch (err) {
       alert((err as Error).message);
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
   }
 
@@ -106,9 +119,10 @@ export default function AddProjectModal({ gapId, onClose }: AddProjectModalProps
 
           <button
             type="submit"
-            className="w-full bg-gold text-bgDeep font-bold rounded-lg py-2.5 hover:bg-goldBright transition-colors"
+            disabled={isSubmitting}
+            className="w-full bg-gold text-bgDeep font-bold rounded-lg py-2.5 hover:bg-goldBright transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            حفظ المشروع
+            {isSubmitting ? "جارٍ الحفظ..." : "حفظ المشروع"}
           </button>
         </form>
       </div>
