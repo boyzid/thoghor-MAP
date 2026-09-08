@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser, AuthError } from "@/lib/serverAuth";
 
+class ProjectAlreadyCompletedError extends Error {}
+
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   let user;
   try {
@@ -34,10 +36,20 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
 
     const final = await prisma.$transaction(async (tx) => {
-      await tx.project.update({
-        where: { id: project.id },
+      // Atomic concurrency gate: this UPDATE only matches (and only one
+      // concurrent transaction can ever see status still "ACTIVE" thanks to
+      // Postgres row-level locking + WHERE re-evaluation on unblock) if the
+      // project has not already been completed. A losing racing transaction
+      // gets count 0 here and must stop before writing any Result/Lesson rows.
+      const transition = await tx.project.updateMany({
+        where: { id: project.id, status: "ACTIVE" },
         data: { status: "COMPLETED" },
       });
+
+      if (transition.count === 0) {
+        throw new ProjectAlreadyCompletedError();
+      }
+
       await tx.result.createMany({
         data: [
           { projectId: project.id, title: "الإنجازات", description: body.achievements },
@@ -55,6 +67,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     return NextResponse.json(final);
   } catch (err) {
+    if (err instanceof ProjectAlreadyCompletedError) {
+      return NextResponse.json({ error: "Project already completed" }, { status: 409 });
+    }
     return NextResponse.json(
       { error: "Database unavailable", message: (err as Error).message },
       { status: 503 }
