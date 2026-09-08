@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useStore } from "@/lib/store";
 
@@ -17,10 +17,20 @@ export default function CompleteProjectModal({
   const [achievements, setAchievements] = useState("");
   const [results, setResults] = useState("");
   const [lessonsLearned, setLessonsLearned] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Authoritative re-entrancy guard: a ref mutates synchronously, so a second
+  // invocation of handleSubmit (fast double-click, repeated Enter, etc.) sees
+  // the updated value immediately — unlike isSubmitting state, whose update
+  // is not visible until the next render.
+  const isSubmittingRef = useRef(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!achievements.trim() || !results.trim() || !lessonsLearned.trim()) return;
+    if (isSubmittingRef.current) return;
+
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
     try {
       await completeProject(projectId, {
         achievements: achievements.trim(),
@@ -30,6 +40,9 @@ export default function CompleteProjectModal({
       onClose();
     } catch (err) {
       alert((err as Error).message);
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
   }
 
@@ -87,9 +100,10 @@ export default function CompleteProjectModal({
 
           <button
             type="submit"
-            className="w-full bg-gold text-bgDeep font-bold rounded-lg py-2.5 hover:bg-goldBright transition-colors"
+            disabled={isSubmitting}
+            className="w-full bg-gold text-bgDeep font-bold rounded-lg py-2.5 hover:bg-goldBright transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            حفظ وإنهاء المشروع
+            {isSubmitting ? "جارٍ الحفظ..." : "حفظ وإنهاء المشروع"}
           </button>
         </form>
       </div>
