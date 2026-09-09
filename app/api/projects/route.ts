@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser, AuthError } from "@/lib/serverAuth";
+import { requireUser } from "@/lib/serverAuth";
+import { parseJson } from "@/lib/api/validate";
+import { errorResponse, NotFoundError } from "@/lib/api/errors";
+import { createProjectSchema } from "@/lib/api/schemas";
 
 export async function GET() {
   try {
@@ -10,48 +13,37 @@ export async function GET() {
     });
     return NextResponse.json(projects);
   } catch (err) {
-    return NextResponse.json(
-      { error: "Database unavailable", message: (err as Error).message },
-      { status: 503 }
-    );
+    return errorResponse(err);
   }
 }
 
 export async function POST(req: Request) {
-  let user;
   try {
-    user = await requireUser();
-  } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+    const user = await requireUser();
+    const data = await parseJson(req, createProjectSchema);
+
+    const gap = await prisma.gap.findUnique({
+      where: { id: data.gapId },
+      select: { id: true },
+    });
+    if (!gap) {
+      throw new NotFoundError("Gap not found");
     }
-    throw err;
-  }
 
-  const body = await req.json();
-
-  if (!body?.gapId || !body?.title || !body?.owner || !body?.country || !body?.summary) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-  }
-
-  try {
     const project = await prisma.project.create({
       data: {
-        gapId: body.gapId,
-        title: body.title,
-        owner: body.owner,
-        country: body.country,
-        contact: body.contact || null,
-        summary: body.summary,
+        gapId: data.gapId,
+        title: data.title,
+        owner: data.owner,
+        country: data.country,
+        contact: data.contact,
+        summary: data.summary,
         status: "ACTIVE",
         creatorId: user.id,
       },
     });
     return NextResponse.json(project, { status: 201 });
   } catch (err) {
-    return NextResponse.json(
-      { error: "Database unavailable", message: (err as Error).message },
-      { status: 503 }
-    );
+    return errorResponse(err);
   }
 }

@@ -1,30 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser, AuthError } from "@/lib/serverAuth";
-
-class ProjectAlreadyCompletedError extends Error {}
+import { requireUser } from "@/lib/serverAuth";
+import { parseJson } from "@/lib/api/validate";
+import { errorResponse, ConflictError, ForbiddenError, NotFoundError } from "@/lib/api/errors";
+import { completeProjectSchema } from "@/lib/api/schemas";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  let user;
   try {
-    user = await requireUser();
-  } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
-  }
+    const user = await requireUser();
+    const data = await parseJson(req, completeProjectSchema);
 
-  const body = await req.json();
-
-  if (!body?.achievements || !body?.results || !body?.lessonsLearned) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-  }
-
-  try {
     const project = await prisma.project.findUnique({ where: { id: params.id } });
     if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      throw new NotFoundError("Project not found");
     }
 
     // Ownership check happens against the DB-stored creatorId — never a
@@ -32,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     // authentication existed) can only be completed by an admin.
     const isOwner = project.creatorId !== null && project.creatorId === user.id;
     if (!isOwner && user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw new ForbiddenError();
     }
 
     const final = await prisma.$transaction(async (tx) => {
@@ -47,17 +35,17 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       });
 
       if (transition.count === 0) {
-        throw new ProjectAlreadyCompletedError();
+        throw new ConflictError("Project already completed");
       }
 
       await tx.result.createMany({
         data: [
-          { projectId: project.id, title: "الإنجازات", description: body.achievements },
-          { projectId: project.id, title: "النتائج المحققة", description: body.results },
+          { projectId: project.id, title: "الإنجازات", description: data.achievements },
+          { projectId: project.id, title: "النتائج المحققة", description: data.results },
         ],
       });
       await tx.lesson.create({
-        data: { projectId: project.id, title: "الدروس المستفادة", description: body.lessonsLearned },
+        data: { projectId: project.id, title: "الدروس المستفادة", description: data.lessonsLearned },
       });
       return tx.project.findUniqueOrThrow({
         where: { id: project.id },
@@ -67,12 +55,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     return NextResponse.json(final);
   } catch (err) {
-    if (err instanceof ProjectAlreadyCompletedError) {
-      return NextResponse.json({ error: "Project already completed" }, { status: 409 });
-    }
-    return NextResponse.json(
-      { error: "Database unavailable", message: (err as Error).message },
-      { status: 503 }
-    );
+    return errorResponse(err);
   }
 }

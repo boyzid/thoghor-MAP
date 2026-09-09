@@ -14,9 +14,7 @@ export async function GET() {
       projects: projectCount,
     });
   } catch (err) {
-    return NextResponse.json(
-      { status: "error", db: "disconnected", message: (err as Error).message },
-      { status: 503 }
-    );
+    console.error("[api] /api/health check failed", err);
+    return NextResponse.json({ status: "error", db: "disconnected" }, { status: 503 });
   }
 }
