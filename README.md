@@ -25,7 +25,7 @@ docker compose up --build
   إعادة التشغيل — لا يُعيد تنفيذ migrations مطبَّقة مسبقًا).
 - الـ seed **لا** يعمل تلقائيًا. لتشغيله يدويًا داخل الحاوية:
   ```bash
-  docker compose exec app node prisma/seed.mjs
+  docker compose exec app npx tsx prisma/seed.ts
   ```
 - فحص الجاهزية: `GET /api/health` (يتحقق من الاتصال الفعلي بقاعدة البيانات).
 
@@ -59,7 +59,7 @@ lib/
 prisma/
   schema.prisma                   → مخطط قاعدة البيانات
   migrations/                     → migrations إنتاجية (prisma migrate deploy)
-  seed.mjs                        → بيانات تجريبية أولية (تشغيل يدوي فقط)
+  seed.ts                         → بيانات تجريبية أولية (تشغيل يدوي فقط)
 Dockerfile                        → بناء إنتاجي متعدد المراحل (Next.js standalone)
 docker-compose.yml                → app + PostgreSQL مع healthcheck
 docker-entrypoint.sh              → يطبّق migrate deploy قبل بدء التطبيق
