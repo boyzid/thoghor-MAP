@@ -1,0 +1,88 @@
+name: Quality Gate
+
+# Protects the branches that matter (main, the production Docker branch) on
+# every push, gates PRs into them, and also runs on feature branches so
+# contributors get the same signal before opening a PR.
+on:
+  push:
+    branches:
+      - main
+      - infrastructure/production-docker
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
+      - infrastructure/production-docker
+
+# A new push to the same branch/PR supersedes the previous run instead of
+# piling up ephemeral Postgres services.
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Schema, migrations, seed idempotency, typecheck, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        # GitHub Actions blocks job steps until this healthcheck passes, so
+        # migrations can never race an unready database.
+        options: >-
+          --health-cmd="pg_isready -U ci -d ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      # Ephemeral, isolated, CI-only database — created fresh for this job
+      # and discarded when it ends. Never a developer or production
+      # database. Credentials are dummy values scoped to this container
+      # only; they are not secrets and are not related to any real
+      # deployment credential.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Apply migrations (prisma migrate deploy)
+        run: npx prisma migrate deploy
+
+      - name: Seed database (run 1)
+        run: npm run db:seed
+
+      - name: Record row counts after seed run 1
+        run: node scripts/ci/verify-seed.mjs record
+
+      - name: Seed database again (run 2 — idempotency check)
+        run: npm run db:seed
+
+      - name: Verify counts stable, no duplicate IDs, relational data correct
+        run: node scripts/ci/verify-seed.mjs verify
+
+      - name: Type check (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
