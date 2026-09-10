@@ -1,0 +1,68 @@
+# Isolated, disposable integration-test composition — NOT used for
+# production or local development (see docker-compose.yml for that).
+#
+# Builds the real production image from the repository Dockerfile and runs
+# it against a throwaway PostgreSQL 16 instance on a dedicated network, so
+# Task 4's integration gate exercises the actual container that would be
+# deployed, not `next dev`/`next start` on the host.
+#
+# Safety:
+# - CI/test-only credentials only; never references the local `.env` or any
+#   production DATABASE_URL.
+# - PostgreSQL has no published host port — reachable only from `app` via
+#   the `test-net` network, by service name.
+# - Postgres data lives in an anonymous volume, not a tmpfs mount: tmpfs is
+#   torn down and remounted empty on every container *restart* (not just
+#   removal), which silently wipes the schema/data whenever Task 4's own
+#   PostgreSQL-restart recovery check runs — a test-harness artifact, not
+#   real production behavior (production uses a real persistent volume, so
+#   a normal container restart there does not lose data). An anonymous
+#   volume survives container restarts, exactly like production, while
+#   still being fully disposable: `docker compose down -v` removes it.
+name: thoghor-itest
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: citest
+      POSTGRES_PASSWORD: citest
+      POSTGRES_DB: citest
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - test-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U citest -d citest"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Docker service hostname, not localhost - matches how the production
+      # compose file connects `app` to `db`.
+      DATABASE_URL: postgresql://citest:citest@postgres:5432/citest
+      NEXTAUTH_URL: http://localhost:3100
+      NEXTAUTH_SECRET: ci-test-only-secret-not-a-real-credential
+      GOOGLE_CLIENT_ID: ""
+      GOOGLE_CLIENT_SECRET: ""
+    ports:
+      # Loopback-only, and only the app port - Postgres is never exposed.
+      - "127.0.0.1:3100:3000"
+    networks:
+      - test-net
+
+networks:
+  test-net:
+    driver: bridge
+
+volumes:
+  pgdata:
