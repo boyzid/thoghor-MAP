@@ -32,3 +32,7 @@ html, body {
 
 .badge-status-active { background: rgba(201,154,85,0.15); color: #E0B876; border: 1px solid rgba(201,154,85,0.4); }
 .badge-status-completed { background: rgba(127,161,137,0.15); color: #7FA189; border: 1px solid rgba(127,161,137,0.4); }
+
+.badge-source-book { background: rgba(127,161,137,0.15); color: #7FA189; border: 1px solid rgba(127,161,137,0.4); }
+.badge-source-community { background: rgba(88,120,172,0.15); color: #8CA6D6; border: 1px solid rgba(88,120,172,0.4); }
+.badge-gap-archived { background: rgba(148,148,148,0.15); color: #a0a0a0; border: 1px solid rgba(148,148,148,0.35); }

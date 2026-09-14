@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient, Priority, ProjectStatus } from "@prisma/client";
+import { PrismaClient, Priority, ProjectStatus, GapSource, GapStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -12,6 +12,7 @@ interface SeedGap {
   category: string;
   priority: Priority;
   skills: string[];
+  source: GapSource;
 }
 
 interface SeedResult {
@@ -48,6 +49,7 @@ const INITIAL_GAPS: SeedGap[] = [
     category: "بناء وتمكين",
     priority: Priority.high,
     skills: ["تمويل", "إدارة أوقاف", "دعم مؤسسي"],
+    source: GapSource.COMMUNITY,
   },
   {
     id: "g2",
@@ -57,6 +59,7 @@ const INITIAL_GAPS: SeedGap[] = [
     category: "إعلام ومحتوى",
     priority: Priority.high,
     skills: ["كتابة", "تصميم", "فيديو", "تحرير"],
+    source: GapSource.COMMUNITY,
   },
   {
     id: "g3",
@@ -66,6 +69,7 @@ const INITIAL_GAPS: SeedGap[] = [
     category: "تنسيق وتعاون",
     priority: Priority.medium,
     skills: ["تنظيم", "وساطة", "تواصل"],
+    source: GapSource.COMMUNITY,
   },
   {
     id: "g4",
@@ -75,6 +79,7 @@ const INITIAL_GAPS: SeedGap[] = [
     category: "علمي وفكري",
     priority: Priority.high,
     skills: ["بحث شرعي", "كتابة", "ترجمة"],
+    source: GapSource.COMMUNITY,
   },
   {
     id: "g5",
@@ -84,6 +89,7 @@ const INITIAL_GAPS: SeedGap[] = [
     category: "إغاثة ورعاية",
     priority: Priority.high,
     skills: ["إرشاد نفسي", "تعليم", "تنظيم إغاثي"],
+    source: GapSource.COMMUNITY,
   },
   {
     id: "g6",
@@ -93,6 +99,7 @@ const INITIAL_GAPS: SeedGap[] = [
     category: "تربية وهوية",
     priority: Priority.medium,
     skills: ["تربية", "محتوى", "تعليم"],
+    source: GapSource.COMMUNITY,
   },
   {
     id: "g7",
@@ -102,6 +109,7 @@ const INITIAL_GAPS: SeedGap[] = [
     category: "توثيق ومعرفة",
     priority: Priority.medium,
     skills: ["كتابة", "أرشفة", "مقابلات"],
+    source: GapSource.COMMUNITY,
   },
   {
     id: "g8",
@@ -111,6 +119,7 @@ const INITIAL_GAPS: SeedGap[] = [
     category: "بناء وتمكين",
     priority: Priority.medium,
     skills: ["تدريب", "تصميم مناهج", "تيسير"],
+    source: GapSource.COMMUNITY,
   },
   {
     id: "g9",
@@ -120,6 +129,52 @@ const INITIAL_GAPS: SeedGap[] = [
     category: "بحث وتخطيط",
     priority: Priority.normal,
     skills: ["تحليل", "بحث ميداني"],
+    source: GapSource.COMMUNITY,
+  },
+];
+
+// The four system-seeded Book Gaps (source = BOOK, creatorId = null,
+// platform/admin-managed, not owned by any user).
+const INITIAL_BOOK_GAPS: SeedGap[] = [
+  {
+    id: "book-gap-1",
+    title: "Strategic Market Gap",
+    description:
+      "عدم توافق المنتج الرقمي مع الاحتياجات الفعلية للجمهور المستهدف رغم جودة التنفيذ التقني، مما يؤدي إلى هدر الموارد في بناء ميزات غير مطلوبة.",
+    category: "Strategy",
+    priority: Priority.high,
+    skills: ["تحليل السوق", "دراسة الجدوى", "استطلاع رأي العملاء"],
+    source: GapSource.BOOK,
+  },
+  {
+    id: "book-gap-2",
+    title: "Technical Execution Gap",
+    description:
+      "الاعتماد على بنيات برمجية معقدة أو غير مستقرة لا تتحمل ضغط الاستخدام الفعلي، مما يتسبب في أعطال متكررة وبطء في استجابة النظام.",
+    category: "Engineering",
+    priority: Priority.high,
+    skills: ["اختبار الأداء", "مراجعة الكود", "إدارة الخوادم (DevOps)"],
+    source: GapSource.BOOK,
+  },
+  {
+    id: "book-gap-3",
+    title: "UX & Clarity Gap",
+    description:
+      "تعقيد مسار المستخدم وعدم وضوح القيمة المقدمة منذ اللحظة الأولى للزيارة، مما يرفع معدل الارتداد ويقلل التحويل.",
+    category: "UX/UI",
+    priority: Priority.medium,
+    skills: ["هندسة المعلومات", "اختبار قابلية الاستخدام", "التصميم التفاعلي"],
+    source: GapSource.BOOK,
+  },
+  {
+    id: "book-gap-4",
+    title: "Operational & Distribution Gap",
+    description:
+      "غياب خطة واضحة لاستدامة المشروع وتوليد القيمة على المدى الطويل، والاعتماد على قنوات نمو أحادية غير قابلة للتوسع.",
+    category: "Operations",
+    priority: Priority.medium,
+    skills: ["التشغيل الآلي", "تحليل البيانات (Pandas)", "استراتيجيات التسويق الرقمي"],
+    source: GapSource.BOOK,
   },
 ];
 
@@ -213,7 +268,10 @@ const INITIAL_PROJECTS: SeedProject[] = [
 
 async function main() {
   await prisma.$transaction(async (tx) => {
-    for (const gap of INITIAL_GAPS) {
+    // `source` is intentionally omitted from `update`: a promotion
+    // (COMMUNITY -> BOOK) is a deliberate one-way admin action, and a
+    // content re-seed must never silently revert it on a later run.
+    for (const gap of [...INITIAL_GAPS, ...INITIAL_BOOK_GAPS]) {
       await tx.gap.upsert({
         where: { id: gap.id },
         update: {
@@ -264,7 +322,7 @@ async function main() {
   const lessonCount = INITIAL_PROJECTS.reduce((n, p) => n + (p.lessons?.length ?? 0), 0);
 
   console.log(
-    `Seed complete: ${INITIAL_GAPS.length} gaps, ${INITIAL_PROJECTS.length} projects, ${resultCount} results, ${lessonCount} lessons (upserted, safe to re-run).`
+    `Seed complete: ${INITIAL_GAPS.length + INITIAL_BOOK_GAPS.length} gaps (${INITIAL_BOOK_GAPS.length} BOOK), ${INITIAL_PROJECTS.length} projects, ${resultCount} results, ${lessonCount} lessons (upserted, safe to re-run).`
   );
 }
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Priority } from "@prisma/client";
+import { GapSource, Priority } from "@prisma/client";
 
 function requiredTrimmedString(label: string) {
   return z
@@ -9,6 +9,10 @@ function requiredTrimmedString(label: string) {
 }
 
 // POST /api/gaps
+// `source` is only ever honored by gapService.createGap for an ADMIN caller
+// (and is required in that case) — it's optional here purely because a
+// normal USER's request legitimately omits it; the service never trusts a
+// non-admin-supplied source.
 export const createGapSchema = z.object({
   title: requiredTrimmedString("title"),
   description: requiredTrimmedString("description"),
@@ -22,7 +26,25 @@ export const createGapSchema = z.object({
     .transform((v) => (v && v.length > 0 ? v : "عام")),
   priority: z.nativeEnum(Priority),
   skills: z.array(requiredTrimmedString("each skill")).optional().default([]),
+  source: z.nativeEnum(GapSource).optional(),
 });
+
+// PATCH /api/gaps/[id] — only the fields a Gap creator/admin may edit.
+// `.strict()` rejects any other key (source/status/creatorId/id/timestamps)
+// with a 400 instead of silently ignoring it, so a client can never even
+// attempt to smuggle a protected field through this route.
+export const updateGapSchema = z
+  .object({
+    title: requiredTrimmedString("title").optional(),
+    description: requiredTrimmedString("description").optional(),
+    category: requiredTrimmedString("category").optional(),
+    priority: z.nativeEnum(Priority).optional(),
+    skills: z.array(requiredTrimmedString("each skill")).optional(),
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided",
+  });
 
 // POST /api/projects
 export const createProjectSchema = z.object({

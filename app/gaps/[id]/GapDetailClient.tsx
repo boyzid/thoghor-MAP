@@ -1,20 +1,43 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
-import { ArrowRight, Mail } from "lucide-react";
+import { ArrowRight, Mail, Pencil, Archive } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { PRIORITY_LABEL } from "@/lib/types";
+import { Gap, PRIORITY_LABEL } from "@/lib/types";
 import AddProjectModal from "@/app/components/modals/AddProjectModal";
+import EditGapModal from "@/app/components/modals/EditGapModal";
 
 export default function GapDetailClient({ gapId }: { gapId: string }) {
-  const { getGap, getProjectsForGap, loading } = useStore();
+  const { getGap, getProjectsForGap, fetchGap, archiveGap, loading } = useStore();
   const { data: session } = useSession();
-  const gap = getGap(gapId);
+
+  // The list-derived gap (from the ACTIVE-only public listing) is enough
+  // for the common case, but a direct link to an archived/removed gap must
+  // still resolve to "not found" even if a stale cached list still has it
+  // — so the detail page always confirms against the server directly.
+  const [gap, setGap] = useState<Gap | null | undefined>(() => getGap(gapId) ?? undefined);
+  const [checkedServer, setCheckedServer] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchGap(gapId).then((fresh) => {
+      if (!cancelled) {
+        setGap(fresh ?? null);
+        setCheckedServer(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [gapId, fetchGap]);
+
   const [tab, setTab] = useState<"ACTIVE" | "COMPLETED">("ACTIVE");
   const [country, setCountry] = useState("all");
   const [showAddProject, setShowAddProject] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   const allProjects = gap ? getProjectsForGap(gap.id) : [];
 
@@ -29,7 +52,33 @@ export default function GapDetailClient({ gapId }: { gapId: string }) {
     );
   }, [allProjects, tab, country]);
 
-  if (loading) {
+  // UI-only convenience mirror of lib/services/gapAuth.ts's canUpdateGap /
+  // canArchiveGap — the service enforces the real authorization; this only
+  // decides whether to show the buttons.
+  const canManage =
+    !!session?.user &&
+    !!gap &&
+    (session.user.role === "ADMIN" ||
+      (gap.source === "COMMUNITY" &&
+        gap.status === "ACTIVE" &&
+        gap.creatorId !== null &&
+        gap.creatorId === session.user.id));
+
+  async function handleArchive() {
+    if (!gap || archiving) return;
+    if (!confirm("هل تريد أرشفة هذا الثغر؟ سيختفي من اللوحة العامة.")) return;
+    setArchiving(true);
+    try {
+      await archiveGap(gap.id);
+      setGap({ ...gap, status: "ARCHIVED" });
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setArchiving(false);
+    }
+  }
+
+  if (loading || (!checkedServer && gap === undefined)) {
     return <div className="max-w-3xl mx-auto px-5 py-16 text-center text-textDim">جارٍ التحميل...</div>;
   }
 
@@ -57,15 +106,23 @@ export default function GapDetailClient({ gapId }: { gapId: string }) {
       </Link>
 
       <div className="bg-panel border border-line rounded-xl p-6 mb-8">
-        <div className="flex items-center gap-3 mb-3">
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
           <span className={`badge badge-priority-${gap.priority}`}>
             {PRIORITY_LABEL[gap.priority]}
           </span>
+          <span
+            className={`badge ${gap.source === "BOOK" ? "badge-source-book" : "badge-source-community"}`}
+          >
+            {gap.source === "BOOK"
+              ? "📖 من الكتاب"
+              : `👤 بواسطة ${gap.creator?.name ?? "مستخدم"}`}
+          </span>
+          {gap.status === "ARCHIVED" && <span className="badge badge-gap-archived">مؤرشف</span>}
           <span className="text-xs text-textDim">{gap.category}</span>
         </div>
         <h1 className="font-display text-2xl mb-3">{gap.title}</h1>
         <p className="text-sm text-textDim mb-4">{gap.description}</p>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 mb-4">
           {gap.skills.map((s) => (
             <span
               key={s}
@@ -75,6 +132,28 @@ export default function GapDetailClient({ gapId }: { gapId: string }) {
             </span>
           ))}
         </div>
+
+        {canManage && (
+          <div className="flex items-center gap-2 border-t border-line pt-4 mt-2">
+            <button
+              onClick={() => setShowEdit(true)}
+              className="inline-flex items-center gap-1.5 text-xs bg-panel2 border border-line rounded-lg px-3 py-2 hover:border-gold transition-colors"
+            >
+              <Pencil size={13} />
+              تعديل
+            </button>
+            {gap.status === "ACTIVE" && (
+              <button
+                onClick={handleArchive}
+                disabled={archiving}
+                className="inline-flex items-center gap-1.5 text-xs bg-panel2 border border-line rounded-lg px-3 py-2 hover:border-gold transition-colors disabled:opacity-60"
+              >
+                <Archive size={13} />
+                {archiving ? "جارٍ الأرشفة..." : "أرشفة"}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
@@ -153,15 +232,29 @@ export default function GapDetailClient({ gapId }: { gapId: string }) {
         </div>
       )}
 
-      <button
-        onClick={() => (session ? setShowAddProject(true) : signIn("google"))}
-        className="bg-gold text-bgDeep font-bold rounded-lg px-5 py-2.5 hover:bg-goldBright transition-colors"
-      >
-        + إضافة مشروع جديد تحت هذا الثغر
-      </button>
+      {gap.status === "ACTIVE" ? (
+        <button
+          onClick={() => (session ? setShowAddProject(true) : signIn("google"))}
+          className="bg-gold text-bgDeep font-bold rounded-lg px-5 py-2.5 hover:bg-goldBright transition-colors"
+        >
+          + إضافة مشروع جديد تحت هذا الثغر
+        </button>
+      ) : (
+        <p className="text-sm text-textDim">هذا الثغر مؤرشف ولا يقبل مشاريع جديدة.</p>
+      )}
 
       {showAddProject && (
         <AddProjectModal gapId={gap.id} onClose={() => setShowAddProject(false)} />
+      )}
+      {showEdit && (
+        <EditGapModal
+          gap={gap}
+          onClose={() => {
+            setShowEdit(false);
+            const refreshed = getGap(gap.id);
+            if (refreshed) setGap(refreshed);
+          }}
+        />
       )}
     </div>
   );
