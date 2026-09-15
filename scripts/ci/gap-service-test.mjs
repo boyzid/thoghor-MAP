@@ -509,6 +509,90 @@ async function main() {
     }
   }
 
+  // ================= FOLLOW-UP COVERAGE =================
+  {
+    // TEST 1 — ADMIN UPDATE OF ARCHIVED GAP: an ADMIN can edit an archived
+    // COMMUNITY gap's allowed fields through the real update path, and
+    // source/status/creatorId must survive the edit untouched.
+    const { body: created } = await req("/api/gaps", {
+      method: "POST",
+      cookie: USER_A_COOKIE,
+      body: validGapPayload(),
+    });
+    await req(`/api/gaps/${created.id}/archive`, { method: "PATCH", cookie: USER_A_COOKIE });
+
+    const updatedDescription = "Admin-edited description on an archived gap";
+    const { status: adminUpdateStatus } = await req(`/api/gaps/${created.id}`, {
+      method: "PATCH",
+      cookie: ADMIN_COOKIE,
+      body: { description: updatedDescription },
+    });
+    const { status: adminGetStatus, body: fetched } = await req(`/api/admin/gaps/${created.id}`, {
+      cookie: ADMIN_COOKIE,
+    });
+
+    if (adminUpdateStatus !== 200) {
+      fail("ADMIN update of archived gap succeeds", { status: adminUpdateStatus });
+    } else if (adminGetStatus !== 200) {
+      fail("ADMIN re-fetch of archived gap succeeds", { status: adminGetStatus });
+    } else if (fetched.source !== "COMMUNITY") {
+      fail("ADMIN update of archived gap: source unchanged", fetched.source);
+    } else if (fetched.status !== "ARCHIVED") {
+      fail("ADMIN update of archived gap: status remains ARCHIVED", fetched.status);
+    } else if (fetched.creatorId !== created.creatorId) {
+      fail("ADMIN update of archived gap: creatorId unchanged", {
+        before: created.creatorId,
+        after: fetched.creatorId,
+      });
+    } else if (fetched.description !== updatedDescription) {
+      fail("ADMIN update of archived gap: allowed field applied", fetched.description);
+    } else {
+      ok("ADMIN can update an archived COMMUNITY gap's allowed fields while source/status/creatorId remain unchanged");
+    }
+  }
+  {
+    // TEST 2 — PROJECT CREATION WITH NONEXISTENT GAP: the real
+    // POST /api/projects path must reject a gapId that does not exist,
+    // matching the existing "missing -> 404" idiom used elsewhere in this
+    // file (see "unarchive missing -> 404", "promote missing -> 404").
+    const { status } = await req("/api/projects", {
+      method: "POST",
+      cookie: USER_A_COOKIE,
+      body: {
+        gapId: "does-not-exist",
+        title: "Should fail — nonexistent gap",
+        owner: "Tester",
+        country: "Testland",
+        summary: "Should be rejected",
+      },
+    });
+    assertStatus("project creation with nonexistent gap -> 404", status, 404);
+  }
+  {
+    // TEST 3 — ADMIN LISTING INCLUDES ARCHIVED GAP: GET /api/admin/gaps
+    // must include archived gaps by default (no implicit status filter),
+    // unlike the public listing which excludes them.
+    const { body: created } = await req("/api/gaps", {
+      method: "POST",
+      cookie: USER_A_COOKIE,
+      body: validGapPayload(),
+    });
+    await req(`/api/gaps/${created.id}/archive`, { method: "PATCH", cookie: USER_A_COOKIE });
+
+    const { status, body: list } = await req("/api/admin/gaps", { cookie: ADMIN_COOKIE });
+    const found = Array.isArray(list) ? list.find((g) => g.id === created.id) : undefined;
+
+    if (status !== 200) {
+      fail("admin listing includes archived gap", { status });
+    } else if (!found) {
+      fail("admin listing includes archived gap: gap present", created.id);
+    } else if (found.status !== "ARCHIVED") {
+      fail("admin listing includes archived gap: status is ARCHIVED", found.status);
+    } else {
+      ok("GET /api/admin/gaps includes an archived gap with status ARCHIVED");
+    }
+  }
+
   // ================= PROFILE =================
   {
     const before = await req("/api/users/gaps-test-usera");
