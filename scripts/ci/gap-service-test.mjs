@@ -223,6 +223,43 @@ async function main() {
     assertStatus("update rejects protected field (source) with 400", status, 400);
   }
   {
+    // Dedicated COMMUNITY gap with a real (non-null) creatorId, updated
+    // through the real API/service path, then re-fetched from the server
+    // (not just read off the PATCH response) to confirm creatorId/source
+    // survive the update untouched, alongside status and the edited field.
+    const { body: created } = await req("/api/gaps", {
+      method: "POST",
+      cookie: USER_A_COOKIE,
+      body: validGapPayload(),
+    });
+    const creatorIdBefore = created.creatorId;
+
+    const { status: patchStatus } = await req(`/api/gaps/${created.id}`, {
+      method: "PATCH",
+      cookie: USER_A_COOKIE,
+      body: { description: "Updated description for creatorId-preservation check" },
+    });
+    assertStatus("creatorId-preservation update succeeds", patchStatus, 200);
+
+    const { status: getStatus, body: fetched } = await req(`/api/gaps/${created.id}`);
+    if (assertStatus("creatorId-preservation gap re-fetched", getStatus, 200)) {
+      if (fetched.source !== "COMMUNITY") {
+        fail("creatorId preservation: source unchanged", fetched.source);
+      } else if (fetched.creatorId !== creatorIdBefore || fetched.creatorId !== "gaps-test-usera") {
+        fail("creatorId preservation: creatorId unchanged", {
+          before: creatorIdBefore,
+          after: fetched.creatorId,
+        });
+      } else if (fetched.status !== "ACTIVE") {
+        fail("creatorId preservation: status unchanged", fetched.status);
+      } else if (fetched.description !== "Updated description for creatorId-preservation check") {
+        fail("creatorId preservation: content field applied", fetched.description);
+      } else {
+        ok("updateGap preserves creatorId/source/status for a COMMUNITY gap while applying the edit");
+      }
+    }
+  }
+  {
     const { status, body } = await req(`/api/gaps/${bookGapId}`, {
       method: "PATCH",
       cookie: ADMIN_COOKIE,
