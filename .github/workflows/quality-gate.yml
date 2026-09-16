@@ -87,6 +87,31 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Start server and run Gaps service tests
+        # Starts the just-built app in the background against this job's
+        # own Postgres service (already migrated/seeded above, already
+        # reachable from the runner at localhost:5432), runs the Gaps v1
+        # functional suite against it, then always stops exactly the PID
+        # it started — via `trap ... EXIT` so cleanup runs whether the
+        # suite passes, fails, or the script errors out under `bash -e`.
+        # GOOGLE_CLIENT_ID/SECRET are set empty to match the same
+        # disposable, no-OAuth pattern already used by docker-compose.test.yml
+        # for the integration-test job; none of these values are real
+        # credentials.
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          NEXTAUTH_SECRET: ci-test-only-secret-not-a-real-credential
+          NEXTAUTH_URL: http://127.0.0.1:3200
+          PORT: "3200"
+          GOOGLE_CLIENT_ID: ""
+          GOOGLE_CLIENT_SECRET: ""
+          BASE_URL: http://127.0.0.1:3200
+        run: |
+          npm start &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          node scripts/ci/gap-service-test.mjs
+
   integration-test:
     name: Production Docker image integration test
     needs: quality-gate
