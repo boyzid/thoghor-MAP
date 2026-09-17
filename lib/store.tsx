@@ -3,11 +3,19 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { Gap, Project } from "./types";
 
+type AddGapInput = Omit<Gap, "id" | "creatorId" | "status" | "source" | "creator">;
+type UpdateGapInput = Partial<
+  Pick<Gap, "title" | "description" | "category" | "priority" | "skills">
+>;
+
 interface StoreShape {
   gaps: Gap[];
   projects: Project[];
   loading: boolean;
-  addGap: (gap: Omit<Gap, "id" | "creatorId">) => Promise<Gap>;
+  addGap: (gap: AddGapInput) => Promise<Gap>;
+  updateGap: (gapId: string, data: UpdateGapInput) => Promise<Gap>;
+  archiveGap: (gapId: string) => Promise<Gap>;
+  fetchGap: (gapId: string) => Promise<Gap | null>;
   addProject: (
     project: Omit<Project, "id" | "status" | "creatorId" | "results" | "lessons">
   ) => Promise<Project>;
@@ -54,7 +62,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const addGap = useCallback(async (gap: Omit<Gap, "id" | "creatorId">) => {
+  const addGap = useCallback(async (gap: AddGapInput) => {
     const res = await fetch("/api/gaps", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -65,6 +73,40 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const newGap: Gap = data;
     setGaps((prev) => [newGap, ...prev]);
     return newGap;
+  }, []);
+
+  const updateGap = useCallback(async (gapId: string, data: UpdateGapInput) => {
+    const res = await fetch(`/api/gaps/${gapId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error || "تعذّر تحديث الثغر");
+    const updated: Gap = body;
+    setGaps((prev) => prev.map((g) => (g.id === gapId ? updated : g)));
+    return updated;
+  }, []);
+
+  const archiveGap = useCallback(async (gapId: string) => {
+    const res = await fetch(`/api/gaps/${gapId}/archive`, {
+      method: "PATCH",
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error || "تعذّر أرشفة الثغر");
+    const updated: Gap = body;
+    // Archived gaps drop out of the public list, matching the server's own
+    // ACTIVE-only listing rule.
+    setGaps((prev) => prev.filter((g) => g.id !== gapId));
+    return updated;
+  }, []);
+
+  const fetchGap = useCallback(async (gapId: string) => {
+    const res = await fetch(`/api/gaps/${gapId}`);
+    if (res.status === 404) return null;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || "تعذّر تحميل الثغر");
+    return data as Gap;
   }, []);
 
   const addProject = useCallback(
@@ -122,6 +164,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         projects,
         loading,
         addGap,
+        updateGap,
+        archiveGap,
+        fetchGap,
         addProject,
         completeProject,
         getGap,

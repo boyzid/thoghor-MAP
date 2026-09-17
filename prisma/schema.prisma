@@ -22,6 +22,16 @@ enum Role {
   ADMIN
 }
 
+enum GapSource {
+  BOOK
+  COMMUNITY
+}
+
+enum GapStatus {
+  ACTIVE
+  ARCHIVED
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -75,12 +85,14 @@ model VerificationToken {
 }
 
 model Gap {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String
   description String
   category    String
   priority    Priority
   skills      String[]
+  source      GapSource
+  status      GapStatus @default(ACTIVE)
 
   creatorId String?
   creator   User?   @relation(fields: [creatorId], references: [id], onDelete: SetNull)
@@ -88,6 +100,9 @@ model Gap {
   projects  Project[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@index([status, source])
+  @@index([creatorId, status])
 }
 
 model Project {

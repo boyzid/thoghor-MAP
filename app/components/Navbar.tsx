@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useSession, signIn, signOut } from "next-auth/react";
-import { Search, LogIn, LogOut } from "lucide-react";
+import { Search, LogIn, LogOut, ShieldCheck } from "lucide-react";
 
 interface NavbarProps {
   search: string;
@@ -29,7 +30,16 @@ export default function Navbar({ search, onSearchChange }: NavbarProps) {
           />
         </div>
 
-        <div>
+        <div className="flex items-center gap-4">
+          {status === "authenticated" && session.user.role === "ADMIN" && (
+            <Link
+              href="/admin/gaps"
+              className="flex items-center gap-1.5 text-sm text-textDim hover:text-gold transition-colors"
+            >
+              <ShieldCheck size={16} />
+              <span>إدارة الثغور</span>
+            </Link>
+          )}
           {status === "authenticated" ? (
             <button
               onClick={() => signOut()}

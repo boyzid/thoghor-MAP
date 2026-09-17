@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/serverAuth";
 import { parseJson } from "@/lib/api/validate";
-import { errorResponse, NotFoundError } from "@/lib/api/errors";
+import { errorResponse } from "@/lib/api/errors";
 import { createProjectSchema } from "@/lib/api/schemas";
+import { assertGapAcceptsNewProjects } from "@/lib/services/gapService";
 
 export async function GET() {
   try {
@@ -22,13 +23,7 @@ export async function POST(req: Request) {
     const user = await requireUser();
     const data = await parseJson(req, createProjectSchema);
 
-    const gap = await prisma.gap.findUnique({
-      where: { id: data.gapId },
-      select: { id: true },
-    });
-    if (!gap) {
-      throw new NotFoundError("Gap not found");
-    }
+    await assertGapAcceptsNewProjects(data.gapId);
 
     const project = await prisma.project.create({
       data: {

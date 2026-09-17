@@ -14,9 +14,16 @@ export default function GapCard({ gap, projectsCount }: GapCardProps) {
       className="block bg-panel border border-line rounded-xl p-5 hover:border-line/60 hover:-translate-y-0.5 transition-all"
     >
       <div className="flex items-center justify-between mb-3">
-        <span className={`badge badge-priority-${gap.priority}`}>
-          {PRIORITY_LABEL[gap.priority]}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`badge badge-priority-${gap.priority}`}>
+            {PRIORITY_LABEL[gap.priority]}
+          </span>
+          <span
+            className={`badge ${gap.source === "BOOK" ? "badge-source-book" : "badge-source-community"}`}
+          >
+            {gap.source === "BOOK" ? "📖 من الكتاب" : "👤 مجتمعي"}
+          </span>
+        </div>
         <span className="text-xs text-textDim">{gap.category}</span>
       </div>
 

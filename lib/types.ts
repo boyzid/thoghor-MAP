@@ -4,6 +4,16 @@ export type ProjectStatus = "ACTIVE" | "COMPLETED";
 
 export type Role = "USER" | "ADMIN";
 
+export type GapSource = "BOOK" | "COMMUNITY";
+
+export type GapStatus = "ACTIVE" | "ARCHIVED";
+
+export interface GapCreator {
+  id: string;
+  name: string | null;
+  image: string | null;
+}
+
 export interface Gap {
   id: string;
   title: string;
@@ -11,7 +21,10 @@ export interface Gap {
   category: string;
   priority: Priority;
   skills: string[];
+  source: GapSource;
+  status: GapStatus;
   creatorId: string | null;
+  creator?: GapCreator | null;
 }
 
 export interface Result {
